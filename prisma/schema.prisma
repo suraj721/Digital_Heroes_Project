@@ -1,0 +1,202 @@
+// Prisma Schema for Golf Prize Club Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String         @id @default(uuid())
+  email             String         @unique
+  password          String
+  name              String?
+  phone             String?
+  role              UserRole       @default(SUBSCRIBER)
+  isActive          Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  // Relations
+  subscriptions     Subscription[]
+  scores            Score[]
+  userCharity       UserCharity?
+  winners           Winner[]
+  
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  SUBSCRIBER
+  ADMIN
+  PUBLIC
+}
+
+model Subscription {
+  id                  String              @id @default(uuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  razorpayOrderId     String?             @unique
+  razorpayPaymentId   String?             @unique
+  razorpaySubscriptionId String?          @unique
+  
+  plan                SubscriptionPlan
+  status              SubscriptionStatus  @default(PENDING)
+  amount              Float
+  currency            String              @default("INR")
+  
+  startDate           DateTime?
+  endDate             DateTime?
+  cancelledAt         DateTime?
+  
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+  @@index([razorpaySubscriptionId])
+}
+
+enum SubscriptionPlan {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+model Score {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  score       Int       // Score between 1-45
+  scoreDate   DateTime
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([scoreDate])
+  @@unique([userId, scoreDate])
+}
+
+model Charity {
+  id              String        @id @default(uuid())
+  name            String
+  description     String        @db.Text
+  category        String?
+  imageUrl        String?
+  websiteUrl      String?
+  isFeatured      Boolean       @default(false)
+  isActive        Boolean       @default(true)
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  userCharities   UserCharity[]
+  
+  @@index([isFeatured])
+  @@index([isActive])
+}
+
+model UserCharity {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  charityId             String
+  charity               Charity   @relation(fields: [charityId], references: [id])
+  
+  contributionPercent   Float     @default(10.0) // Minimum 10%
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([charityId])
+}
+
+model Draw {
+  id                String      @id @default(uuid())
+  drawDate          DateTime    @unique
+  drawMonth         String      // Format: "YYYY-MM"
+  drawMode          DrawMode
+  
+  totalPrizePool    Float
+  jackpotCarryOver  Float       @default(0)
+  
+  winningNumbers    String      // JSON array of 5 numbers
+  
+  isSimulated       Boolean     @default(false)
+  isPublished       Boolean     @default(false)
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  // Relations
+  winners           Winner[]
+  
+  @@index([drawMonth])
+  @@index([isPublished])
+}
+
+enum DrawMode {
+  RANDOM
+  WEIGHTED
+}
+
+model Winner {
+  id              String        @id @default(uuid())
+  drawId          String
+  draw            Draw          @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  matchTier       MatchTier
+  prizeAmount     Float
+  userNumbers     String        // JSON array of matched numbers
+  
+  proofUrl        String?       // Screenshot/proof upload
+  verificationStatus VerificationStatus @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  
+  verifiedAt      DateTime?
+  paidAt          DateTime?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([drawId])
+  @@index([userId])
+  @@index([verificationStatus])
+  @@index([paymentStatus])
+}
+
+enum MatchTier {
+  FIVE_MATCH
+  FOUR_MATCH
+  THREE_MATCH
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
